@@ -1,12 +1,13 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlmodel import Session, create_engine, select, engine
+from sqlmodel import SQLModel, Session, select
 from pydantic import BaseModel
 from typing import Optional
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, UTC
 from passlib.context import CryptContext
 from .models import User, UserCreate, UserLogin, UserOut
+from sqlalchemy import create_engine, engine
 
 app = FastAPI()
 
@@ -60,6 +61,16 @@ async def get_current_user(token: str = Depends(oauth2_scheme), session: Session
         raise credentials_exception
     return user
 
+def create_db_and_tables():
+    SQLModel.metadata.create_all(engine)
+    
+def required_role(role: str):
+    def role_checker(user: User = Depends(get_current_user)):
+        if user.role != role:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Operation not permitted")
+        return user
+    return role_checker
+
 @app.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register(user: UserCreate, session: Session = Depends(get_session)):
     existing_user = session.exec(select(User).where(User.username == user.username)).first()
@@ -67,7 +78,7 @@ def register(user: UserCreate, session: Session = Depends(get_session)):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists")
     
     hashed_password = hash_password(user.password)
-    db_user = User(username=user.username, password=hashed_password)
+    db_user = User(username=user.username, password=hashed_password, role="user")
     session.add(db_user)
     session.commit()
     session.refresh(db_user)
@@ -84,4 +95,8 @@ def login(user: UserLogin, session: Session = Depends(get_session)):
 
 @app.get("/users/me", response_model=UserOut)
 async def read_users_me(current_user: User = Depends(get_current_user)):
+    return UserOut(id=current_user.id, username=current_user.username)
+
+@app.get("/admin", response_model=UserOut, dependencies=[Depends(required_role("admin"))])
+async def read_admin(current_user: User = Depends(get_current_user)):
     return UserOut(id=current_user.id, username=current_user.username)

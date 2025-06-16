@@ -5,9 +5,10 @@ from models import User, UserCreate, UserOut, UserLogin
 
 app = FastAPI()
 
+DATABASE_URL = "postgresql://alisher:271221@localhost:5432/auth_db"
+engine = create_engine(DATABASE_URL)
 
 def create_db_and_tables():
-    engine = create_engine("sqlite:///database.db")
     SQLModel.metadata.create_all(engine)
 
 @app.on_event("startup")

@@ -10,6 +10,9 @@ app = FastAPI()
 
 password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+DATABASE_URL = "postgresql://alisher:271221@localhost:5432/auth_db"
+engine = create_engine(DATABASE_URL)
+
 SECRET_KEY = "1a2b3c4d5e6f7g8h9i0jklmnopqrstuvwx"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30

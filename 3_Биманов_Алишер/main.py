@@ -9,6 +9,9 @@ app = FastAPI()
 
 password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+DATABASE_URL = "postgresql://alisher:271221@localhost:5432/auth_db"
+engine = create_engine(DATABASE_URL)
+
 def hash_password(password: str) -> str:
     return password_context.hash(password)
 
@@ -16,7 +19,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return password_context.verify(plain_password, hashed_password)
 
 def create_db_and_tables():
-    engine = create_engine("sqlite:///database.db")
     SQLModel.metadata.create_all(engine)
 
 @app.on_event("startup")
