@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+sqlmodel
+asyncpg
+psycopg2-binary
+python-dotenv
+passlib[bcrypt]
+aioredis
+celery
+pydantic-settings

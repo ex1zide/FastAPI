@@ -1,0 +1,75 @@
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from sqlmodel import SQLModel, Session, select
+from pydantic import BaseModel
+from typing import Optional
+from jose import JWTError, jwt
+from datetime import datetime, timedelta, UTC
+from passlib.context import CryptContext
+from .models import User, Token
+from sqlalchemy import create_engine, engine
+
+app = FastAPI()
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+DATABASE_URL = "postgresql://alisher:271221@localhost:5432/auth_db"
+engine = create_engine(DATABASE_URL)
+
+SECRET_KEY = "1a2b3c4d5e6f7g8h9i0jklmnopqrstuvwx"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+
+def get_session():
+    with Session(engine) as session:
+        yield session
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    expire = datetime.now(UTC) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+async def get_current_user(token: str = Depends(oauth2_scheme), session: Session = Depends(get_session)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    user = session.exec(select(User).where(User.username == username)).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+def create_db_and_tables():
+    SQLModel.metadata.create_all(engine)
+    
+def required_role(role: str):
+    def role_checker(user: User = Depends(get_current_user)):
+        if user.role != role:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Operation not permitted")
+        return user
+    return role_checker
+
+@asynccontextmanager
+async def lifespan():
+    create_db_and_tables()
+    yield
